@@ -1,3 +1,27 @@
+import math
+import random
+import time
+
+MAX_ITER = 100
+
+def random_formula(n):
+    num_vars = random.randint(int(math.sqrt(n)), int(2 * math.sqrt(n))) #int entre raiz de n e 2 raiz de n
+    
+    clausulas = []
+    
+    for _ in range(n):
+        tamanho = random.randint(1, 3)  # restringindo tamanho da cláusula (1 a 3)
+        clause = set()
+        
+        while len(clause) < tamanho:
+            var = random.randint(1, num_vars)
+            lit = var if random.random() < 0.5 else -var #1/2 pra literal 1/2 pra neg literal
+            clause.add(lit)
+        
+        clausulas.append(clause)
+    
+    return clausulas
+
 def resolucao(c1, c2):
     resolvente = set()
     
@@ -8,15 +32,14 @@ def resolucao(c1, c2):
     
     return resolvente
 
-
-def bobinho(clausulas, max_iter=100):
+def bobinho(clausulas):
     clausulas = set(map(frozenset, clausulas)) #frozenset é só para trabalharmos com conjuntos de cláusulas.
     #vamos ter um mapa entre as clausulas imutaveis e as clausulas mutaveis, para podermos trabalhar com conjuntos de clausulas e ao mesmo tempo ter a facilidade de manipular as clausulas como listas.
     count = 0
     while True:
-        count += 1
-        if count > max_iter:
-            return "oops"
+        if count > MAX_ITER:
+            return "TIMEOUT"
+        count = count + 1
         new_clausulas = set()
         clause_list = list(clausulas)
         
@@ -39,6 +62,7 @@ def bobinho(clausulas, max_iter=100):
         
         clausulas |= new_clausulas
         #ou seja, vamos aplicando resolução e gerando clausulas novas e adicionando ao conjunto de clausulas, até que ou geramos a clausula vazia (UNSAT) ou não geramos mais nada novo (SAT).
+
 def linear(clausulas):
     clausulas = set(map(frozenset, clausulas))
     visitadas = set(clausulas)
@@ -46,7 +70,11 @@ def linear(clausulas):
     caminhos = [(c, {c}) for c in clausulas]
     def pode_resolver(c1, c2):
         return any(-l in c2 for l in c1)
+    count = 0
     while caminhos: #temos que testar todos os possíveis caminhos iniciais
+        if count > MAX_ITER:
+            return "TIMEOUT"
+        count = count + 1
         atual, ancestors = caminhos.pop()  # pega o próximo caminho a ser explorado
         #nosso espaco de busca e nas clausulas originais e nos ancestrais
         candidatos = clausulas | (ancestors - {atual}) # os candidatos para resolver com a cláusula atual são as cláusulas originais e os ancestrais, exceto a própria cláusula atual
@@ -116,55 +144,59 @@ def resolucao_direcionada(clausulas, ordem):
                         novo_v = menor_var(r)
                         if novo_v is not None:
                             buckets[novo_v].append(r)
-                        buckets[v] = []
+        buckets[v] = []
 
     return "SAT"
 
-#testes abaixo
-        
-clausulas1 = [
-    {1, 2},
-    {-1},
-    {-2}
-]
-print(bobinho(clausulas1))
-print(linear(clausulas1))
-print(resolucao_direcionada(clausulas1, ordem=[1, 2]))
-clausulas2 = [
-    {1, 2},
-    {-1, 3},
-    {-2, 3},
-    {-3}
-]
-print(bobinho(clausulas2))  
-print(linear(clausulas2))
-print(resolucao_direcionada(clausulas2, ordem=[1, 2, 3]))
-clausulas3 = [
-    {1, 2, 3},
-    {-1, 4},
-    {-2, 4},
-    {-3, 4},
-    {-4}
-]
-print(bobinho(clausulas3))
-print(linear(clausulas3))
-print(resolucao_direcionada(clausulas3, ordem=[1, 2, 3, 4]))
-clausulas4 = [
-    {1, 2},
-    {-1, 2},
-    {1, -2}
-]
-print(bobinho(clausulas4))
-print(linear(clausulas4))
-print(resolucao_direcionada(clausulas4, ordem=[1, 2]))
-clausulas5 = [
-    {1, 2},
-    {1, 3},
-    {2, 3},
-    {-1, -2},
-    {-1, -3},
-    {-2, -3}
-]
-print(bobinho(clausulas5))
-print(linear(clausulas5))
-print(resolucao_direcionada(clausulas5, ordem=[1, 2, 3]))
+def tempo_medio():
+    n = 10
+    tempos = [0, 0, 0]
+    while n < 101:
+        i = 0
+        while i < 10:
+            clausulas = random_formula(n)
+            inicio = time.perf_counter()
+            if(bobinho(clausulas) == "TIMEOUT"):
+                #print(f"Na resolução simples, para n = {n}, TIMEOUT")
+                fim = time.perf_counter()
+                tempos[0] = 100000
+            else:
+                fim = time.perf_counter()
+                tempos[0] = tempos[0] + fim - inicio
+            inicio = time.perf_counter()
+            if(linear(clausulas) == "TIMEOUT"):
+                #print(f"Na resolução linear, para n = {n}, TIMEOUT")
+                fim = time.perf_counter()
+                tempos[1] = 100000
+            else:
+                fim = time.perf_counter()
+                tempos[1] = tempos[1] + fim - inicio
+            ordem = list(set(abs(l) for c in clausulas for l in c))
+            random.shuffle(ordem)
+            inicio = time.perf_counter()
+            resolucao_direcionada(clausulas, ordem)
+            fim = time.perf_counter()
+            tempos[2] = tempos[2] + fim - inicio
+            i = i + 1
+        print("Na resolução simples")
+        print(f"Para n = {n}, tempo médio é {tempos[0]/10}")
+        print("Na resolução linear")
+        print(f"Para n = {n}, tempo médio é {tempos[1]/10}")
+        print("Na resolução direcionada")
+        print(f"Para n = {n}, tempo médio é {tempos[2]/10}")
+        n = n + 10
+        tempos[0] = 0
+        tempos[1] = 0
+        tempos[2] = 0
+
+def sat_solver(clausulas):
+    inicio = time.perf_counter()
+    #print(bobinho(clausulas))
+    #print(linear(clausulas))
+    print(resolucao_direcionada(clausulas, list(range(1, 101))))
+    fim = time.perf_counter()
+    return fim - inicio
+
+#rodando tempo médio
+tempo_medio()
+
